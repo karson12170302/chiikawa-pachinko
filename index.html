@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>Chiikawa 主題彈珠機 - 多啦A夢特別版</title>
+    <style>
+        body { background: #f0f0f0; display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
+        canvas { background: #fff; border: 5px solid #ffcc00; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.2); }
+        .info { margin-top: 10px; font-size: 20px; font-weight: bold; color: #333; }
+        .controls { margin-top: 10px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #ffcc00; border: none; border-radius: 5px; }
+        button:hover { background: #ffaa00; }
+    </style>
+</head>
+<body>
+
+    <div class="info">分數: <span id="score">0</span> | 倍率: <span id="multiplier">?</span></div>
+    
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+    <div class="controls">
+        <button onclick="launchBall()">發射彈珠！</button>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const multiEl = document.getElementById('multiplier');
+
+    let score = 0;
+    let ball = { x: 380, y: 580, r: 8, vx: 0, vy: 0, active: false };
+    let pins = []; // 釘子
+    let slots = 16; // 16格燈位
+    let currentMultiplier = 2; // 預設倍率
+
+    // 初始化釘子 (障礙物)
+    for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < (i % 2 === 0 ? 7 : 8); j++) {
+            pins.push({ x: 50 + j * 45 + (i % 2 === 0 ? 20 : 0), y: 150 + i * 40 });
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 畫釘子
+        ctx.fillStyle = "#888";
+        pins.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // 畫底部的 16 格燈位
+        for (let i = 0; i < slots; i++) {
+            ctx.strokeStyle = "#ccc";
+            ctx.strokeRect(i * (canvas.width / slots), 550, canvas.width / slots, 50);
+            ctx.fillStyle = "#333";
+            ctx.font = "10px Arial";
+            ctx.fillText(i + 1, i * (canvas.width / slots) + 5, 580);
+        }
+
+        // 畫彈珠
+        if (ball.active) {
+            ctx.fillStyle = "#ff4444";
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+            ctx.fill();
+            updateBall();
+        }
+
+        requestAnimationFrame(draw);
+    }
+
+    function launchBall() {
+        if (ball.active) return;
+        
+        // 隨機決定今場倍率 (2, 5, 10, 20)
+        const multis = [2, 5, 10, 20];
+        currentMultiplier = multis[Math.floor(Math.random() * multis.length)];
+        multiEl.innerText = currentMultiplier + "x";
+
+        ball.x = 380;
+        ball.y = 580;
+        ball.vx = -2 - Math.random() * 2;
+        ball.vy = -12 - Math.random() * 5;
+        ball.active = true;
+    }
+
+    function updateBall() {
+        ball.vy += 0.2; // 重力
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        // 牆壁碰撞
+        if (ball.x < ball.r || ball.x > canvas.width - ball.r) ball.vx *= -0.7;
+        if (ball.y < ball.r) ball.vy *= -0.7;
+
+        // 釘子碰撞物理
+        pins.forEach(p => {
+            let dx = ball.x - p.x;
+            let dy = ball.y - p.y;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < ball.r + 3) {
+                ball.vx += dx * 0.1;
+                ball.vy *= -0.5;
+            }
+        });
+
+        // 跌入底部格仔
+        if (ball.y > 550) {
+            let slotIndex = Math.floor(ball.x / (canvas.width / slots));
+            // 簡單邏輯：中獎就加分
+            score += 10 * currentMultiplier;
+            scoreEl.innerText = score;
+            ball.active = false;
+        }
+    }
+
+    draw();
+</script>
+</body>
+</html>
