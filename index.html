@@ -2,123 +2,202 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>Chiikawa 主題彈珠機 - 多啦A夢特別版</title>
+    <title>香港真實彈珠機 - Chiikawa 終極版</title>
     <style>
-        body { background: #f0f0f0; display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
-        canvas { background: #fff; border: 5px solid #ffcc00; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.2); }
-        .info { margin-top: 10px; font-size: 20px; font-weight: bold; color: #333; }
-        .controls { margin-top: 10px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #ffcc00; border: none; border-radius: 5px; }
-        button:hover { background: #ffaa00; }
+        body { background: #111; color: #fff; display: flex; flex-direction: column; align-items: center; font-family: '微軟正黑體', sans-serif; margin: 0; padding: 10px; overflow-x: hidden; }
+        .machine-frame { border: 15px solid #444; border-radius: 40px; background: #000; padding: 20px; box-shadow: 0 0 60px #ffcc00; position: relative; }
+        
+        /* LED 顯示屏 */
+        .led-panel { background: #050505; border: 3px solid #333; padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; border-radius: 10px; }
+        .led-item { color: #f00; font-family: 'Courier New', monospace; font-size: 18px; text-shadow: 0 0 5px #f00; }
+        
+        canvas { background: radial-gradient(circle, #1a1a1a 0%, #000 100%); display: block; border-radius: 10px; border: 2px solid #222; }
+
+        /* 按鈕區 */
+        .control-grid { margin-top: 20px; display: flex; gap: 15px; align-items: center; }
+        button { cursor: pointer; border: none; border-radius: 12px; font-weight: bold; transition: 0.1s; box-shadow: 0 5px #000; }
+        button:active { transform: translateY(3px); box-shadow: 0 2px #000; }
+        
+        .btn-coin { background: #ffd700; color: #333; padding: 15px 25px; font-size: 18px; }
+        .btn-push { background: #ff4d4f; color: #fff; width: 100px; height: 100px; border-radius: 50%; font-size: 20px; border: 5px solid #a8071a; }
+        .btn-shop { background: #1890ff; color: #fff; padding: 15px 20px; }
+        .btn-admin { background: #333; color: #666; font-size: 10px; padding: 5px; position: absolute; bottom: 10px; right: 10px; }
+
+        /* 浮窗系統 */
+        .modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 320px; background: #222; border: 3px solid #ffcc00; border-radius: 20px; padding: 20px; z-index: 1000; box-shadow: 0 0 100px #000; }
+        .item-row { display: flex; justify-content: space-between; margin-bottom: 12px; padding: 8px; border-bottom: 1px solid #333; }
     </style>
 </head>
 <body>
 
-    <div class="info">分數: <span id="score">0</span> | 倍率: <span id="multiplier">?</span></div>
-    
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <div class="machine-frame" id="machine">
+        <div class="led-panel">
+            <div class="led-item">入珠: <span id="ballsIn">0</span> / 99</div>
+            <div class="led-item">分數: <span id="score">1000</span></div>
+            <div class="led-item">累積: <span id="pot">0</span> / 50</div>
+            <div class="led-item">卡片: <span id="cards">0</span></div>
+        </div>
 
-    <div class="controls">
-        <button onclick="launchBall()">發射彈珠！</button>
+        <canvas id="gameCanvas" width="420" height="600"></canvas>
+
+        <div class="control-grid">
+            <button class="btn-coin" onclick="insertCoin()">🪙 投幣 100</button>
+            <button class="btn-push" onclick="launchBall()">PUSH</button>
+            <button class="btn-shop" onclick="toggleModal('shop')">🏪 商店</button>
+        </div>
+
+        <button class="btn-admin" onclick="toggleModal('admin')">ADMIN</button>
+
+        <div id="shop" class="modal">
+            <h2 style="color:#ffcc00; text-align:center;">Chiikawa 兌換處</h2>
+            <div class="item-row"><span>小八貓貼紙</span> <span>1卡</span> <button onclick="buy(1,'貼紙')">換</button></div>
+            <div class="item-row"><span>兔兔掛件</span> <span>5卡</span> <button onclick="buy(5,'掛件')">換</button></div>
+            <div class="item-row"><span>黃金波子外觀</span> <span>20卡</span> <button onclick="buy(20,'外觀')">換</button></div>
+            <button style="width:100%; margin-top:10px; background:#444; color:#fff;" onclick="toggleModal('shop')">退出</button>
+        </div>
+
+        <div id="admin" class="modal">
+            <h3 style="color:#fff;">後台密碼: 0302</h3>
+            <input type="password" id="pw" style="width:100%; padding:10px; margin-bottom:10px;">
+            <button style="width:100%; padding:10px; background:#52c41a;" onclick="login()">登入系統</button>
+            <div id="tools" style="display:none; margin-top:10px;">
+                <button style="width:100%; background:#ff4d4f;" onclick="reset()">⚠️ 全機數據清零</button>
+            </div>
+            <button style="width:100%; margin-top:10px; background:#444;" onclick="toggleModal('admin')">關閉</button>
+        </div>
     </div>
 
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const scoreEl = document.getElementById('score');
-    const multiEl = document.getElementById('multiplier');
 
-    let score = 0;
-    let ball = { x: 380, y: 580, r: 8, vx: 0, vy: 0, active: false };
-    let pins = []; // 釘子
-    let slots = 16; // 16格燈位
-    let currentMultiplier = 2; // 預設倍率
+    let score = 1000, ballsIn = 0, pot = 0, cards = 0;
+    let ball = { x: 400, y: 560, r: 10, vx: 0, vy: 0, active: false };
+    let pins = [], slots = [], jackpotEffect = 0;
 
-    // 初始化釘子 (障礙物)
-    for (let i = 0; i < 8; i++) {
-        for (let j = 0; j < (i % 2 === 0 ? 7 : 8); j++) {
-            pins.push({ x: 50 + j * 45 + (i % 2 === 0 ? 20 : 0), y: 150 + i * 40 });
+    function init() {
+        // 真實釘子分佈
+        for (let r = 0; r < 12; r++) {
+            let cols = (r % 2 === 0) ? 8 : 9;
+            for (let c = 0; c < cols; c++) {
+                pins.push({ x: 45 + c * 42 + (r % 2 === 0 ? 21 : 0), y: 100 + r * 40 });
+            }
         }
+        // 香港真實賠率 1:2:3:4:6 比例
+        let m = [10, 8, 8, 6, 6, 6, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2];
+        m.sort(() => Math.random() - 0.5);
+        const sw = canvas.width / 16;
+        for (let i = 0; i < 16; i++) slots.push({ x: i * sw, w: sw, multi: m[i], active: false });
     }
 
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 燈位閃爍效果 (中大獎時)
+        if (jackpotEffect > 0) {
+            ctx.fillStyle = jackpotEffect % 10 < 5 ? 'rgba(255,255,0,0.2)' : 'rgba(255,0,0,0.2)';
+            ctx.fillRect(0,0,canvas.width,canvas.height);
+            jackpotEffect--;
+        }
 
         // 畫釘子
-        ctx.fillStyle = "#888";
-        pins.forEach(p => {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-            ctx.fill();
+        ctx.fillStyle = "#555";
+        pins.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 7); ctx.fill(); });
+
+        // 畫燈位
+        slots.forEach((s, i) => {
+            ctx.fillStyle = s.active ? "#ff0" : (i % 2 === 0 ? "#111" : "#1a1a1a");
+            ctx.fillRect(s.x, 540, s.w, 60);
+            ctx.strokeStyle = s.active ? "#fff" : "#333";
+            ctx.strokeRect(s.x, 540, s.w, 60);
+            ctx.fillStyle = s.active ? "#000" : "#ff4d4f";
+            ctx.font = "bold 12px Arial";
+            ctx.fillText(s.multi, s.x + s.w/2 - 5, 575);
         });
 
-        // 畫底部的 16 格燈位
-        for (let i = 0; i < slots; i++) {
-            ctx.strokeStyle = "#ccc";
-            ctx.strokeRect(i * (canvas.width / slots), 550, canvas.width / slots, 50);
-            ctx.fillStyle = "#333";
-            ctx.font = "10px Arial";
-            ctx.fillText(i + 1, i * (canvas.width / slots) + 5, 580);
-        }
-
-        // 畫彈珠
+        // 畫波子 (Chiikawa 風格)
         if (ball.active) {
-            ctx.fillStyle = "#ff4444";
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, 7); ctx.fill();
+            // 畫小眼
+            ctx.fillStyle = "#000";
+            ctx.beginPath(); ctx.arc(ball.x-3, ball.y-2, 1.5, 0, 7); ctx.fill();
+            ctx.beginPath(); ctx.arc(ball.x+3, ball.y-2, 1.5, 0, 7); ctx.fill();
             updateBall();
         }
-
         requestAnimationFrame(draw);
     }
 
-    function launchBall() {
-        if (ball.active) return;
-        
-        // 隨機決定今場倍率 (2, 5, 10, 20)
-        const multis = [2, 5, 10, 20];
-        currentMultiplier = multis[Math.floor(Math.random() * multis.length)];
-        multiEl.innerText = currentMultiplier + "x";
-
-        ball.x = 380;
-        ball.y = 580;
-        ball.vx = -2 - Math.random() * 2;
-        ball.vy = -12 - Math.random() * 5;
-        ball.active = true;
-    }
-
     function updateBall() {
-        ball.vy += 0.2; // 重力
-        ball.x += ball.vx;
-        ball.y += ball.vy;
-
-        // 牆壁碰撞
-        if (ball.x < ball.r || ball.x > canvas.width - ball.r) ball.vx *= -0.7;
-        if (ball.y < ball.r) ball.vy *= -0.7;
-
-        // 釘子碰撞物理
+        ball.vy += 0.3; ball.x += ball.vx; ball.y += ball.vy;
+        if (ball.x < ball.r || ball.x > canvas.width - ball.r) ball.vx *= -0.6;
+        
         pins.forEach(p => {
-            let dx = ball.x - p.x;
-            let dy = ball.y - p.y;
-            let dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < ball.r + 3) {
-                ball.vx += dx * 0.1;
-                ball.vy *= -0.5;
+            let dx = ball.x - p.x, dy = ball.y - p.y;
+            if (Math.sqrt(dx*dx + dy*dy) < ball.r + 4) {
+                let angle = Math.atan2(dy, dx);
+                ball.vx = Math.cos(angle) * 5; ball.vy = Math.sin(angle) * 5;
             }
         });
 
-        // 跌入底部格仔
-        if (ball.y > 550) {
-            let slotIndex = Math.floor(ball.x / (canvas.width / slots));
-            // 簡單邏輯：中獎就加分
-            score += 10 * currentMultiplier;
-            scoreEl.innerText = score;
+        if (ball.y > 540) {
+            let idx = Math.max(0, Math.min(Math.floor(ball.x / (canvas.width / 16)), 15));
+            let s = slots[idx];
+            s.active = true;
+            pot += s.multi;
+            if (s.multi >= 8) jackpotEffect = 100; // 大獎閃爍
+            if (pot >= 50) { cards += Math.floor(pot/50); pot %= 50; }
+            updateUI();
             ball.active = false;
+            setTimeout(() => s.active = false, 1500);
         }
     }
 
-    draw();
+    function insertCoin() {
+        if (score >= 100 && ballsIn + 10 <= 99) {
+            score -= 100; ballsIn += 10; updateUI();
+        } else { alert("餘額不足或波子已滿！"); }
+    }
+
+    function launchBall() {
+        if (ball.active || ballsIn <= 0) return;
+        ballsIn--; updateUI();
+        ball.x = 400; ball.y = 560;
+        ball.vx = -5 - Math.random()*5; ball.vy = -20 - Math.random()*5;
+        ball.active = true;
+    }
+
+    function updateUI() {
+        document.getElementById('score').innerText = score;
+        document.getElementById('ballsIn').innerText = ballsIn;
+        document.getElementById('pot').innerText = pot;
+        document.getElementById('cards').innerText = cards;
+    }
+
+    function toggleModal(id) {
+        let m = document.getElementById(id);
+        m.style.display = m.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function login() {
+        if (document.getElementById('pw').value === '0302') {
+            document.getElementById('tools').style.display = 'block';
+        } else alert("密碼錯誤");
+    }
+
+    function reset() {
+        score = 1000; ballsIn = 0; pot = 0; cards = 0;
+        updateUI(); toggleModal('admin');
+    }
+
+    function buy(cost, name) {
+        if (cards >= cost) {
+            cards -= cost; updateUI();
+            alert("成功換領 " + name + "！");
+        } else alert("積分卡不足！");
+    }
+
+    init(); draw();
 </script>
 </body>
 </html>
