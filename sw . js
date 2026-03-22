@@ -1,0 +1,3 @@
+self.addEventListener('fetch', function(event) {
+        // 暫時不做快取，只確保 Service Worker 能運作
+});
